@@ -1,0 +1,26 @@
+name: suantechs_flutter_auth
+description: >
+  Reusable Flutter client for suantechs-auth (the suantechs IdP). Wraps the
+  OAuth2 PKCE browser flow (ASWebAuthenticationSession / Custom Tabs) so any
+  suantechs app can offer social sign-in for every provider enabled in the IdP,
+  with no per-provider native wiring. Mirror of @suantechs/angular-auth.
+version: 0.1.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.4.0
+  flutter: '>=3.22.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_web_auth_2: ^4.1.0
+  crypto: ^3.0.3
+  http: ^1.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
