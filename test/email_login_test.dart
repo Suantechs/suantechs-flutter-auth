@@ -149,4 +149,19 @@ void main() {
       expect(SuantechsProvider.of('google').svg, contains('#4285F4'));
     });
   });
+
+  group('la contraseña correcta con segundo factor', () {
+    test('devuelve el token parcial en vez de perderlo', () async {
+      final auth = clientAnswering(
+        (_) => http.Response(jsonEncode({'partial_token': 'pt-9'}), 200),
+      );
+
+      await expectLater(
+        auth.loginWithEmail(email: 'a@test.com', password: 'x'),
+        throwsA(isA<SuantechsAuthException>()
+            .having((e) => e.code, 'code', 'two_factor_required')
+            .having((e) => e.partialToken, 'partialToken', 'pt-9')),
+      );
+    });
+  });
 }

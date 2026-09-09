@@ -8,6 +8,7 @@ class SuantechsAuthConfig {
     required String authBaseUrl,
     required this.clientId,
     required this.redirectUri,
+    this.askWhichAccount = false,
   }) : authBaseUrl = _stripTrailingSlash(authBaseUrl);
 
   /// Base URL of suantechs-auth, including the `/api` prefix.
@@ -20,6 +21,15 @@ class SuantechsAuthConfig {
   /// The custom-scheme redirect registered for [clientId] in the IdP.
   /// Example: `com.suantechs.urbanix://oauth/callback`.
   final String redirectUri;
+
+  /// Whether to make the provider ask which account, every time.
+  ///
+  /// Off by default: on a personal phone with one session it is a pointless
+  /// extra tap. On a **shared device** — a kitchen tablet installed by one
+  /// person and used by another — leaving the choice to the browser means
+  /// staying signed in as whoever installed it, and that does not show up as
+  /// an error: it shows up as a missing permission, days later.
+  final bool askWhichAccount;
 
   /// Scheme portion of [redirectUri] — what `flutter_web_auth_2` listens on.
   /// For `com.suantechs.urbanix://oauth/callback` this is

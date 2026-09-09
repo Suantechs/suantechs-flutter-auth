@@ -24,6 +24,7 @@ IdP automatically lights it up in the app; nothing to recompile.
 | Renovar la sesión | `refresh` |
 | Cerrar sesión | `logout` (best effort) |
 | Los botones con la marca de cada proveedor | `SuantechsSocialButtons` |
+| El segundo factor, por cualquiera de los dos caminos | `verifyTwoFactor` |
 
 Los botones viven aquí a propósito: las marcas ya estaban en este paquete, el
 dashboard web se pegó su propia copia de los SVG y la app de cocina dibujó
@@ -55,6 +56,41 @@ final result = await auth.signInWithProvider('google');
 // …or with the account's own password, same envelope:
 final session = await auth.loginWithEmail(email: email, password: password);
 ```
+
+### Cuentas con segundo factor
+
+Las dos rutas —contraseña y social— lanzan `SuantechsAuthException` con
+`code: 'two_factor_required'` y **el token parcial dentro de la excepción**.
+Con él, la app pide el código y termina de entrar con el mismo sobre de
+siempre:
+
+```dart
+try {
+  session = await auth.signInWithProvider('google');
+} on SuantechsAuthException catch (e) {
+  if (e.code == 'two_factor_required' && e.partialToken != null) {
+    final code = await pedirCodigoAlUsuario();          // seis dígitos
+    session = await auth.verifyTwoFactor(
+      partialToken: e.partialToken!,
+      code: code,
+    );
+  }
+}
+```
+
+El token parcial es de un solo uso y dura pocos minutos: un código equivocado
+(`two_factor_invalid_code`) se resuelve volviendo a entrar, no reintentando esa
+llamada.
+
+### Dispositivos compartidos
+
+`askWhichAccount: true` hace que el proveedor pregunte **con cuál cuenta**
+cada vez. Está apagado por defecto porque en un teléfono personal con una sola
+sesión es un toque de más; se enciende donde el dispositivo lo instala una
+persona y lo usa otra —una tablet de cocina—, porque ahí dejar la elección al
+navegador significa quedar dentro con la identidad de quien lo instaló, y eso
+no se manifiesta como un error sino como un permiso que falta, días después.
+El IdP sólo reenvía ese `prompt` si vale exactamente `select_account`.
 
 Y los botones, con la marca de cada proveedor:
 

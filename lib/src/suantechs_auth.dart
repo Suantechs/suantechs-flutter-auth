@@ -33,9 +33,16 @@ class SuantechsAuthResult {
 /// Thrown when a social sign-in fails or is cancelled. [code] mirrors the
 /// IdP's `error=oauth_*` / `two_factor_required` query values when present.
 class SuantechsAuthException implements Exception {
-  SuantechsAuthException(this.message, {this.code});
+  SuantechsAuthException(this.message, {this.code, this.partialToken});
   final String message;
   final String? code;
+
+  /// Present only with `two_factor_required`: the short-lived token that
+  /// [SuantechsAuth.verifyTwoFactor] exchanges for a session once the person
+  /// types their code. Without it a `two_factor_required` is a dead end, which
+  /// is what left the owner of a shop — the one account that has 2FA — outside
+  /// their own kitchen.
+  final String? partialToken;
 
   @override
   String toString() => 'SuantechsAuthException(${code ?? '-'}): $message';
@@ -165,6 +172,7 @@ class SuantechsAuth {
       throw SuantechsAuthException(
         'Esta cuenta tiene verificación en dos pasos.',
         code: 'two_factor_required',
+        partialToken: json['partial_token'] as String,
       );
     }
 
@@ -186,6 +194,11 @@ class SuantechsAuth {
         'code_challenge': pkce.challenge,
         'code_challenge_method': 'S256',
         'state': pkce.state,
+        // El IdP sólo lo reenvía al proveedor si vale exactamente esto
+        // (AUTH-12). Sin él, con varias sesiones abiertas el navegador entrega
+        // la cuenta activa y no pregunta — en un dispositivo compartido eso es
+        // quedar dentro con la identidad de quien lo instaló.
+        if (config.askWhichAccount) 'prompt': 'select_account',
       },
     );
 
@@ -202,14 +215,23 @@ class SuantechsAuth {
     }
 
     final returned = Uri.parse(callback);
-    final error = returned.queryParameters['error'];
-    if (error != null && error.isNotEmpty) {
-      throw SuantechsAuthException(_messageForError(error), code: error);
-    }
 
+    // El estado se comprueba antes que nada, incluso antes del error: lo que
+    // vuelve por un esquema propio lo pudo escribir cualquiera, y más abajo
+    // esta respuesta entrega un token parcial. Comprobarlo después del error
+    // dejaba fuera de la verificación justo al camino que trae ese token.
     if (returned.queryParameters['state'] != pkce.state) {
       throw SuantechsAuthException('Estado OAuth inválido.',
           code: 'invalid_state');
+    }
+
+    final error = returned.queryParameters['error'];
+    if (error != null && error.isNotEmpty) {
+      throw SuantechsAuthException(
+        _messageForError(error),
+        code: error,
+        partialToken: returned.queryParameters['partial_token'],
+      );
     }
 
     final code = returned.queryParameters['code'];
@@ -219,6 +241,36 @@ class SuantechsAuth {
     }
 
     return _exchangeCode(code, pkce.verifier);
+  }
+
+  /// Completes a `two_factor_required` with the code the person typed.
+  ///
+  /// Same envelope as any other sign-in, so the caller stores the session the
+  /// way it already does. The partial token is single-use and short-lived: a
+  /// wrong code means asking again from the start, not retrying this call.
+  Future<SuantechsAuthResult> verifyTwoFactor({
+    required String partialToken,
+    required String code,
+  }) async {
+    final res = await _http
+        .post(
+          Uri.parse('${config.authBaseUrl}/auth/2fa/verify'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'partial_token': partialToken, 'code': code}),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (res.statusCode == 422 || res.statusCode == 401) {
+      throw SuantechsAuthException('Código incorrecto o vencido.',
+          code: 'two_factor_invalid_code');
+    }
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw SuantechsAuthException(
+        'No se pudo verificar el código (${res.statusCode}).',
+        code: 'two_factor_verify_failed',
+      );
+    }
+    return SuantechsAuthResult(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
   Future<SuantechsAuthResult> _exchangeCode(
@@ -250,7 +302,7 @@ class SuantechsAuth {
   String _messageForError(String code) {
     switch (code) {
       case 'two_factor_required':
-        return 'Tu cuenta tiene verificación en dos pasos, aún no disponible en la app.';
+        return 'Tu cuenta pide un código de verificación.';
       case 'oauth_access_denied':
         return 'Inicio de sesión cancelado.';
       case 'oauth_authentication_failed':
