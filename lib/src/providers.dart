@@ -13,7 +13,25 @@ class SuantechsProvider {
   final String label;
 
   /// Brand mark as a raw SVG string (24x24 viewBox), for `flutter_svg`.
+  ///
+  /// Empty for a provider this package does not know: a button with no mark
+  /// still signs somebody in, and a provider turned on in the IdP tomorrow
+  /// should not have to wait for a release of this package to appear.
   final String svg;
+
+  /// The provider for [name], invented from the id when it is not one of the
+  /// known ones. Dropping the unknown ones is the tempting alternative and it
+  /// is the wrong one: it hides from the user the only way their account can
+  /// get in.
+  static SuantechsProvider of(String name) =>
+      kSuantechsProviders[name] ??
+      SuantechsProvider(
+        name: name,
+        label: name.isEmpty
+            ? name
+            : '${name[0].toUpperCase()}${name.substring(1)}',
+        svg: '',
+      );
 }
 
 /// Local registry of every provider this package knows how to render.
