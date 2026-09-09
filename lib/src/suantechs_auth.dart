@@ -18,6 +18,16 @@ class SuantechsAuthResult {
   Map<String, dynamic> get user => (raw['user'] as Map).cast<String, dynamic>();
   String? get accessToken => raw['access_token'] as String?;
   String? get refreshToken => raw['refresh_token'] as String?;
+
+  /// Seconds the access token is good for, as the IdP declared it.
+  int? get expiresIn => (raw['expires_in'] as num?)?.toInt();
+
+  /// When the access token stops being accepted, as an instant this device can
+  /// compare against. **Absent `expires_in` counts as already expired**: the
+  /// caller then refreshes on its next call, which costs one request and never
+  /// costs a session that silently stops working.
+  DateTime get expiresAt =>
+      DateTime.now().add(Duration(seconds: expiresIn ?? 0));
 }
 
 /// Thrown when a social sign-in fails or is cancelled. [code] mirrors the
@@ -59,6 +69,106 @@ class SuantechsAuth {
     final body = jsonDecode(res.body) as Map<String, dynamic>;
     final providers = body['providers'];
     return providers is List ? providers.cast<String>() : <String>[];
+  }
+
+  /// Signs in with the account's own email and password.
+  ///
+  /// Not every account has one -- an owner who signed up with Google never set
+  /// a password -- but many do, and a device that is not a person's phone (a
+  /// kitchen tablet, a counter terminal) is better off with the shop's own
+  /// account than with somebody's Google session. Same envelope as the social
+  /// flow, so everything after this point is one code path.
+  Future<SuantechsAuthResult> loginWithEmail({
+    required String email,
+    required String password,
+  }) =>
+      _postForTokens('/auth/login', {'email': email, 'password': password});
+
+  /// Trades a refresh token for a fresh pair.
+  ///
+  /// A failure here ends the session: there is nothing left to try that does
+  /// not involve a person typing something.
+  Future<SuantechsAuthResult> refresh(String refreshToken) =>
+      _postForTokens('/auth/refresh', {'refresh_token': refreshToken});
+
+  /// Ends the session on the server. Best effort on purpose: the caller drops
+  /// the session locally whatever this answers, so a device with no network
+  /// can still sign out.
+  Future<void> logout(String refreshToken) async {
+    try {
+      await _http
+          .post(
+            Uri.parse('${config.authBaseUrl}/auth/logout'),
+            headers: const {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({'refresh_token': refreshToken}),
+          )
+          .timeout(const Duration(seconds: 15));
+    } catch (_) {
+      // Nothing to do about it, and nothing worth telling the user.
+    }
+  }
+
+  Future<SuantechsAuthResult> _postForTokens(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    late final http.Response res;
+    try {
+      res = await _http
+          .post(
+            Uri.parse('${config.authBaseUrl}$path'),
+            headers: const {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 20));
+    } catch (_) {
+      throw SuantechsAuthException(
+        'No se pudo hablar con el servidor de cuentas.',
+        code: 'network',
+      );
+    }
+
+    Map<String, dynamic> json;
+    try {
+      json = jsonDecode(res.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw SuantechsAuthException(
+        'El servidor de cuentas respondió algo inesperado.',
+        code: 'bad_response',
+      );
+    }
+
+    if (res.statusCode >= 400) {
+      // A 401 is said in our own words: the IdP answers "Invalid credentials"
+      // in English, and these apps are read in Spanish. Every other status
+      // keeps the server's message, which carries information this package
+      // does not have.
+      throw SuantechsAuthException(
+        res.statusCode == 401
+            ? 'Correo o contraseña incorrectos.'
+            : json['message'] as String? ?? 'No se pudo iniciar sesión.',
+        code: res.statusCode == 401 ? 'invalid_credentials' : 'login_failed',
+      );
+    }
+
+    // An account with two-factor answers 200 with a partial token and no
+    // session. Only the shape tells the two apart, and reading it as a
+    // malformed response would tell somebody their password was wrong when it
+    // was right.
+    if (json['partial_token'] is String && json['access_token'] == null) {
+      throw SuantechsAuthException(
+        'Esta cuenta tiene verificación en dos pasos.',
+        code: 'two_factor_required',
+      );
+    }
+
+    return SuantechsAuthResult(json);
   }
 
   /// Runs the full PKCE flow for [provider] and returns the token envelope.

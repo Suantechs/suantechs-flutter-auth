@@ -4,7 +4,7 @@ description: >
   OAuth2 PKCE browser flow (ASWebAuthenticationSession / Custom Tabs) so any
   suantechs app can offer social sign-in for every provider enabled in the IdP,
   with no per-provider native wiring. Mirror of @suantechs/angular-auth.
-version: 0.1.0
+version: 0.2.0
 publish_to: 'none'
 
 environment:
@@ -14,9 +14,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_web_auth_2: ^4.1.0
+  # 5.x, no 4.x: la 4 no compila con el Kotlin integrado de Flutter 3.47 y el
+  # error sale del plugin, no de quien lo usa (`Unresolved reference
+  # 'KeepAliveService'`). Un consumidor con la app entera escrita se queda sin
+  # poder compilar y el mensaje no apunta a este archivo.
+  flutter_web_auth_2: ^5.1.0
   crypto: ^3.0.3
   http: ^1.2.2
+  flutter_svg: ^2.3.0
 
 dev_dependencies:
   flutter_test:
