@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:suantechs_flutter_auth/src/pkce.dart';
 import 'package:suantechs_flutter_auth/suantechs_flutter_auth.dart';
 
@@ -34,6 +36,88 @@ void main() {
       );
       expect(cfg.authBaseUrl, 'https://auth.suantechs.com/api');
       expect(cfg.callbackUrlScheme, 'com.suantechs.urbanix');
+    });
+  });
+
+  group('el dispositivo compartido pide elegir cuenta', () {
+    test('por defecto no lo pide: en un teléfono es un toque de más', () {
+      final cfg = SuantechsAuthConfig(
+        authBaseUrl: 'https://auth.suantechs.com/api',
+        clientId: 'urbanix-mobile',
+        redirectUri: 'com.suantechs.urbanix://oauth/callback',
+      );
+      expect(cfg.askWhichAccount, isFalse);
+    });
+
+    test('una app que comparte dispositivo lo declara', () {
+      final cfg = SuantechsAuthConfig(
+        authBaseUrl: 'https://auth.suantechs.com/api',
+        clientId: 'recash-kds',
+        redirectUri: 'com.suantechs.recashkds://oauth/callback',
+        askWhichAccount: true,
+      );
+      expect(cfg.askWhichAccount, isTrue);
+    });
+  });
+
+  group('two_factor_required deja de ser un callejón sin salida', () {
+    test('la excepción lleva el token parcial que el IdP devolvió', () {
+      final e = SuantechsAuthException('x',
+          code: 'two_factor_required', partialToken: 'pt-123');
+      expect(e.code, 'two_factor_required');
+      expect(e.partialToken, 'pt-123');
+    });
+
+    test('verifyTwoFactor canjea el código por una sesión', () async {
+      late http.Request sent;
+      final auth = SuantechsAuth(
+        SuantechsAuthConfig(
+          authBaseUrl: 'https://auth.suantechs.com/api',
+          clientId: 'recash-kds',
+          redirectUri: 'com.suantechs.recashkds://oauth/callback',
+        ),
+        httpClient: MockClient((r) async {
+          sent = r;
+          return http.Response(
+            jsonEncode({
+              'user': {'id': 'u1'},
+              'access_token': 'at',
+              'refresh_token': 'rt',
+            }),
+            200,
+          );
+        }),
+      );
+
+      final result =
+          await auth.verifyTwoFactor(partialToken: 'pt-123', code: '123456');
+
+      expect(sent.url.path, '/api/auth/2fa/verify');
+      expect(
+          jsonDecode(sent.body), {'partial_token': 'pt-123', 'code': '123456'});
+      expect(result.accessToken, 'at');
+    });
+
+    /// Un código equivocado no es un fallo de red: el token parcial es de un
+    /// solo uso, así que reintentar esta llamada no sirve — hay que volver a
+    /// entrar.
+    test('un código inválido se distingue de un fallo cualquiera', () async {
+      final auth = SuantechsAuth(
+        SuantechsAuthConfig(
+          authBaseUrl: 'https://auth.suantechs.com/api',
+          clientId: 'recash-kds',
+          redirectUri: 'com.suantechs.recashkds://oauth/callback',
+        ),
+        httpClient: MockClient(
+          (_) async => http.Response(jsonEncode({'message': 'Invalid'}), 422),
+        ),
+      );
+
+      await expectLater(
+        auth.verifyTwoFactor(partialToken: 'pt', code: '000000'),
+        throwsA(isA<SuantechsAuthException>()
+            .having((e) => e.code, 'code', 'two_factor_invalid_code')),
+      );
     });
   });
 
