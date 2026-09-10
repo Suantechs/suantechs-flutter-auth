@@ -4,7 +4,7 @@ description: >
   OAuth2 PKCE browser flow (ASWebAuthenticationSession / Custom Tabs) so any
   suantechs app can offer social sign-in for every provider enabled in the IdP,
   with no per-provider native wiring. Mirror of @suantechs/angular-auth.
-version: 0.3.0
+version: 0.3.1
 publish_to: 'none'
 
 environment:
