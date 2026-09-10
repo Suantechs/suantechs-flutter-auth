@@ -246,8 +246,11 @@ class SuantechsAuth {
   /// Completes a `two_factor_required` with the code the person typed.
   ///
   /// Same envelope as any other sign-in, so the caller stores the session the
-  /// way it already does. The partial token is single-use and short-lived: a
-  /// wrong code means asking again from the start, not retrying this call.
+  /// way it already does. The IdP spends the partial token **only when the
+  /// code works**, so a typo is retried right here — asking the person to go
+  /// through the browser again for a mistyped digit would be the app's fault,
+  /// not theirs. What does run out is the clock: the token lives a few
+  /// minutes, and after that the sign-in starts over.
   Future<SuantechsAuthResult> verifyTwoFactor({
     required String partialToken,
     required String code,

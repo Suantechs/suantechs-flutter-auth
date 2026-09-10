@@ -78,9 +78,11 @@ try {
 }
 ```
 
-El token parcial es de un solo uso y dura pocos minutos: un código equivocado
-(`two_factor_invalid_code`) se resuelve volviendo a entrar, no reintentando esa
-llamada.
+El IdP gasta el token parcial **sólo cuando el código sirve**, así que un
+código equivocado (`two_factor_invalid_code`) se reintenta con el mismo token:
+mandar a alguien a repetir el viaje por el navegador por un dedazo sería culpa
+de la app. Lo que sí se acaba es el reloj — el token dura pocos minutos — y
+entonces hay que volver a entrar.
 
 ### Dispositivos compartidos
 
