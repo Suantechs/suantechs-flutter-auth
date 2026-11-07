@@ -27,9 +27,9 @@ class PkcePair {
   factory PkcePair.generate() {
     final rng = Random.secure();
     String randomString(int length, String alphabet) => List.generate(
-      length,
-      (_) => alphabet[rng.nextInt(alphabet.length)],
-    ).join();
+          length,
+          (_) => alphabet[rng.nextInt(alphabet.length)],
+        ).join();
 
     final verifier = randomString(64, _unreserved);
     final digest = sha256.convert(ascii.encode(verifier));

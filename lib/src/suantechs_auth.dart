@@ -56,7 +56,7 @@ class SuantechsAuthException implements Exception {
 /// IdP supports (google, apple, microsoft, github, discord) with one code path.
 class SuantechsAuth {
   SuantechsAuth(this.config, {http.Client? httpClient})
-    : _http = httpClient ?? http.Client();
+      : _http = httpClient ?? http.Client();
 
   final SuantechsAuthConfig config;
   final http.Client _http;
@@ -64,8 +64,9 @@ class SuantechsAuth {
   /// Providers enabled for this app's `client_id` in the IdP. Queried at
   /// runtime so toggling a provider in the IdP needs no rebuild.
   Future<List<String>> fetchProviders() async {
-    final uri = Uri.parse('${config.authBaseUrl}/apps/config')
-        .replace(queryParameters: {'client_id': config.clientId});
+    final uri = Uri.parse('${config.authBaseUrl}/apps/config').replace(
+      queryParameters: {'client_id': config.clientId},
+    );
     final res = await _http.get(uri).timeout(const Duration(seconds: 15));
     if (res.statusCode != 200) {
       throw SuantechsAuthException(
@@ -87,7 +88,8 @@ class SuantechsAuth {
   Future<SuantechsAuthResult> loginWithEmail({
     required String email,
     required String password,
-  }) => _postForTokens('/auth/login', {'email': email, 'password': password});
+  }) =>
+      _postForTokens('/auth/login', {'email': email, 'password': password});
 
   /// Trades a refresh token for a fresh pair.
   ///
@@ -186,19 +188,19 @@ class SuantechsAuth {
 
     final authorizeUrl =
         Uri.parse('${config.authBaseUrl}/auth/$provider/redirect').replace(
-          queryParameters: {
-            'client_id': config.clientId,
-            'redirect_uri': config.redirectUri,
-            'code_challenge': pkce.challenge,
-            'code_challenge_method': 'S256',
-            'state': pkce.state,
-            // El IdP sólo lo reenvía al proveedor si vale exactamente esto
-            // (AUTH-12). Sin él, con varias sesiones abiertas el navegador entrega
-            // la cuenta activa y no pregunta — en un dispositivo compartido eso es
-            // quedar dentro con la identidad de quien lo instaló.
-            if (config.askWhichAccount) 'prompt': 'select_account',
-          },
-        );
+      queryParameters: {
+        'client_id': config.clientId,
+        'redirect_uri': config.redirectUri,
+        'code_challenge': pkce.challenge,
+        'code_challenge_method': 'S256',
+        'state': pkce.state,
+        // El IdP sólo lo reenvía al proveedor si vale exactamente esto
+        // (AUTH-12). Sin él, con varias sesiones abiertas el navegador entrega
+        // la cuenta activa y no pregunta — en un dispositivo compartido eso es
+        // quedar dentro con la identidad de quien lo instaló.
+        if (config.askWhichAccount) 'prompt': 'select_account',
+      },
+    );
 
     final String callback;
     try {
@@ -208,10 +210,8 @@ class SuantechsAuth {
       );
     } catch (_) {
       // User dismissed the browser sheet, or the OS cancelled it.
-      throw SuantechsAuthException(
-        'Inicio de sesión cancelado.',
-        code: 'cancelled',
-      );
+      throw SuantechsAuthException('Inicio de sesión cancelado.',
+          code: 'cancelled');
     }
 
     final returned = Uri.parse(callback);
@@ -221,10 +221,8 @@ class SuantechsAuth {
     // esta respuesta entrega un token parcial. Comprobarlo después del error
     // dejaba fuera de la verificación justo al camino que trae ese token.
     if (returned.queryParameters['state'] != pkce.state) {
-      throw SuantechsAuthException(
-        'Estado OAuth inválido.',
-        code: 'invalid_state',
-      );
+      throw SuantechsAuthException('Estado OAuth inválido.',
+          code: 'invalid_state');
     }
 
     final error = returned.queryParameters['error'];
@@ -238,10 +236,8 @@ class SuantechsAuth {
 
     final code = returned.queryParameters['code'];
     if (code == null || code.isEmpty) {
-      throw SuantechsAuthException(
-        'No se recibió el código de autorización.',
-        code: 'oauth_no_code',
-      );
+      throw SuantechsAuthException('No se recibió el código de autorización.',
+          code: 'oauth_no_code');
     }
 
     return _exchangeCode(code, pkce.verifier);
@@ -268,10 +264,8 @@ class SuantechsAuth {
         .timeout(const Duration(seconds: 15));
 
     if (res.statusCode == 422 || res.statusCode == 401) {
-      throw SuantechsAuthException(
-        'Código incorrecto o vencido.',
-        code: 'two_factor_invalid_code',
-      );
+      throw SuantechsAuthException('Código incorrecto o vencido.',
+          code: 'two_factor_invalid_code');
     }
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw SuantechsAuthException(
