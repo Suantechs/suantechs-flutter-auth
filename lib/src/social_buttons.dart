@@ -46,11 +46,28 @@ class SuantechsSocialButtons extends StatelessWidget {
   static String _defaultLabel(SuantechsProvider provider) =>
       'Entrar con ${provider.label}';
 
+  /// The one title Apple's guidelines accept in Spanish for this button. It
+  /// is not run through [labelBuilder]: a host wording of its own is exactly
+  /// what App Review rejects (STP-369).
+  static const appleLabel = 'Continuar con Apple';
+
+  /// Apple first, then the rest in the IdP's order.
+  ///
+  /// App Store Review 4.8 and Apple's HIG ask that Sign in with Apple be at
+  /// least as prominent as any other sign-in option: never smaller, never
+  /// below them, and drawn in one of Apple's own styles. Same height as the
+  /// others is how it stays "not smaller"; first is how it stays "not below".
+  static List<SuantechsProvider> ordered(List<String> providers) {
+    final views = providers.map(SuantechsProvider.of).toList();
+    final apple = views.where((v) => v.name == 'apple').toList();
+    return [...apple, ...views.where((v) => v.name != 'apple')];
+  }
+
   @override
   Widget build(BuildContext context) {
     if (providers.isEmpty) return const SizedBox.shrink();
 
-    final views = providers.map(SuantechsProvider.of).toList(growable: false);
+    final views = ordered(providers);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -60,30 +77,88 @@ class SuantechsSocialButtons extends StatelessWidget {
           SizedBox(
             height: minHeight,
             width: double.infinity,
-            child: OutlinedButton(
-              onPressed: enabled ? () => onSelected(views[i].name) : null,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (views[i].svg.isNotEmpty) ...[
-                    SvgPicture.string(views[i].svg, width: 22, height: 22),
-                    const SizedBox(width: 12),
-                  ],
-                  Flexible(
-                    child: Text(
-                      labelBuilder(views[i]),
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                      ),
+            child: views[i].name == 'apple'
+                ? _AppleButton(
+                    svg: views[i].svg,
+                    onPressed: enabled ? () => onSelected('apple') : null,
+                  )
+                : OutlinedButton(
+                    onPressed: enabled ? () => onSelected(views[i].name) : null,
+                    child: _Content(
+                      svg: views[i].svg,
+                      label: labelBuilder(views[i]),
                     ),
                   ),
-                ],
-              ),
-            ),
           ),
         ],
+      ],
+    );
+  }
+}
+
+/// Apple's black style on a light screen and its white style on a dark one
+/// (HIG, "Sign in with Apple" buttons): the mark and the title take the
+/// opposite colour, the corners follow the host's other buttons.
+class _AppleButton extends StatelessWidget {
+  const _AppleButton({required this.svg, required this.onPressed});
+
+  final String svg;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final background = dark ? Colors.white : Colors.black;
+    final foreground = dark ? Colors.black : Colors.white;
+    return FilledButton(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        backgroundColor: background,
+        foregroundColor: foreground,
+        disabledBackgroundColor: background.withValues(alpha: 0.4),
+        disabledForegroundColor: foreground.withValues(alpha: 0.7),
+      ),
+      child: _Content(
+        svg: svg,
+        label: SuantechsSocialButtons.appleLabel,
+        markColor: foreground,
+      ),
+    );
+  }
+}
+
+class _Content extends StatelessWidget {
+  const _Content({required this.svg, required this.label, this.markColor});
+
+  final String svg;
+  final String label;
+
+  /// Repaints a single-colour mark (Apple's) to match its button.
+  final Color? markColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (svg.isNotEmpty) ...[
+          SvgPicture.string(
+            svg,
+            width: 22,
+            height: 22,
+            colorFilter: markColor == null
+                ? null
+                : ColorFilter.mode(markColor!, BlendMode.srcIn),
+          ),
+          const SizedBox(width: 12),
+        ],
+        Flexible(
+          child: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+          ),
+        ),
       ],
     );
   }
