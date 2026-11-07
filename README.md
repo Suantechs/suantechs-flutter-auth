@@ -31,6 +31,12 @@ dashboard web se pegó su propia copia de los SVG y la app de cocina dibujó
 botones de texto. Un logo copiado dentro de una app es un logo que envejece
 solo en esa app.
 
+El de Apple va siempre **primero**, con el **estilo de Apple** (negro sobre
+fondo claro, blanco sobre oscuro) y el título fijo «Continuar con Apple», del
+mismo alto que los demás (STP-369). Es lo que piden la regla 4.8 de App Store
+y la guía de diseño de Apple: nunca más chico ni debajo de otro proveedor. Por
+eso `labelBuilder` no cambia ese título.
+
 ## Usage
 
 ```dart
